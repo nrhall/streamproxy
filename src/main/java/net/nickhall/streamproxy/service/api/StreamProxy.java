@@ -19,5 +19,5 @@ public interface StreamProxy {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     @Path("playlist/status")
-    StreamProxyResponse getPlaylistStatus(@Suspended AsyncResponse asyncResponse, StreamProxyRequest request);
+    void getPlaylistStatus(@Suspended AsyncResponse asyncResponse, StreamProxyRequest request);
 }

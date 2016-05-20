@@ -13,7 +13,9 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -21,27 +23,32 @@ public class PlaylistCachingEngine {
     private final static Logger logger = LoggerFactory.getLogger(PlaylistCachingEngine.class);
     private final HttpAsyncClient httpAsyncClient;
     private final ExecutorService executor;
-    private final Path cachePath;
+    private final Path cacheBasePath;
+    private final Map<String, Playlist> cache = new ConcurrentHashMap<>();
 
-    public PlaylistCachingEngine(HttpAsyncClient httpAsyncClient, int threads, Path cachePath) {
+    public PlaylistCachingEngine(HttpAsyncClient httpAsyncClient, int threads, Path cacheBasePath) {
         this.executor = Executors.newFixedThreadPool(threads);
         this.httpAsyncClient = httpAsyncClient;
-        this.cachePath = cachePath;
+        this.cacheBasePath = cacheBasePath;
     }
 
     public void cache(Playlist playlist, String cacheKey) {
-        Path cachePath = this.cachePath.resolve(cacheKey);
-        // determine where the cachePath will be stored
+        Path cachePath = this.cacheBasePath.resolve(cacheKey);
+
+        // determine where the cache will be stored
         if (Files.exists(cachePath)) {
-            // error - cachePath directory already exists
-            throw new IllegalStateException("cachePath directory already exists");
+            // error - cache directory already exists
+            throw new IllegalStateException("cache directory already exists");
         } else {
-            // create the cachePath directory
+            // create the cache directory
             try {
                 Files.createDirectory(cachePath);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
+
+            // cache the playlist
+            cache.put(cacheKey, playlist);
 
             // create tasks for each download and submit to the executor
             playlist.getSegments()
@@ -56,7 +63,7 @@ public class PlaylistCachingEngine {
                                     url = segment.getUrl();
                                 }
 
-                                logger.info("cachePath segment: {}", url);
+                                logger.info("cache segment: {}", url);
 
                                 // create the request/request producer and execute
                                 HttpGet request = new HttpGet(url);
@@ -93,13 +100,13 @@ public class PlaylistCachingEngine {
                                 return segment;
                             }, executor)
                             .thenAccept(s -> {
-                                logger.info("cachePath segment complete: {}", segment.getUrl());
+                                logger.info("cache segment complete: {}", segment.getUrl());
                                 s.setDownloaded(true);
                             }));
         }
     }
 
-    public PlaylistCachingStatus getStatus(String url) {
-        return null;
+    public Playlist getStatus(String cacheKey) {
+        return cache.get(cacheKey);
     }
 }

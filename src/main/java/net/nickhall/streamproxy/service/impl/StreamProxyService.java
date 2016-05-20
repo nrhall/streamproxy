@@ -4,7 +4,6 @@ import net.nickhall.streamproxy.engine.PlaylistCachingEngine;
 import net.nickhall.streamproxy.playlist.Playlist;
 import net.nickhall.streamproxy.service.api.StreamProxy;
 import net.nickhall.streamproxy.service.api.StreamProxyRequest;
-import net.nickhall.streamproxy.service.api.StreamProxyResponse;
 import net.nickhall.streamproxy.util.Constants;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -63,8 +62,7 @@ public class StreamProxyService implements StreamProxy {
                                 // ask the caching engine to cache the playlist
                                 if (request.getCacheKey() == null) {
                                     asyncResponse.resume(Response.serverError().build());
-                                }
-                                else {
+                                } else {
                                     engine.cache(playlist, request.getCacheKey());
                                     asyncResponse.resume(Response.ok().build());
                                 }
@@ -95,11 +93,11 @@ public class StreamProxyService implements StreamProxy {
     }
 
     @Override
-    public StreamProxyResponse getPlaylistStatus(@Suspended final AsyncResponse asyncResponse, StreamProxyRequest request) {
+    public void getPlaylistStatus(@Suspended final AsyncResponse asyncResponse, StreamProxyRequest request) {
         logger.info("playlist status request: uri={}", request.getURL());
 
         // ask the engine for a response
-        engine.getStatus(request.getURL());
-        return new StreamProxyResponse();
+        Playlist playlist = engine.getStatus(request.getCacheKey());
+        asyncResponse.resume(playlist);
     }
 }

@@ -62,8 +62,6 @@ public class Playlist {
                         // parse any lines beginning with #EXT; these are markers referring to the next segment
                         String[] s = l.split(":");
                         try {
-                            logger.debug("next tag: {}", s[0]);
-
                             // file must begin with #EXTM3U
                             if (!seenMagic && !s[0].equals("#EXTM3U")) {
                                 throw new RuntimeException("no magic at start of streamproxy");
