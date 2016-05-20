@@ -1,8 +1,5 @@
-package net.nickhall.eventproxy.playlist;
+package net.nickhall.streamproxy.playlist;
 
-import net.nickhall.eventproxy.playlist.Playlist;
-import net.nickhall.eventproxy.playlist.PlaylistException;
-import net.nickhall.eventproxy.playlist.PlaylistType;
 import org.junit.Test;
 import static org.junit.Assert.*;
 

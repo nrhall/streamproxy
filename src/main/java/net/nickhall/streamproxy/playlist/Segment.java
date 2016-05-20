@@ -1,4 +1,4 @@
-package net.nickhall.eventproxy.playlist;
+package net.nickhall.streamproxy.playlist;
 
 public class Segment {
     private final String title;

@@ -1,4 +1,4 @@
-package net.nickhall.eventproxy.playlist;
+package net.nickhall.streamproxy.playlist;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,7 +55,7 @@ public class Playlist {
 
                             // file must begin with #EXTM3U
                             if (!seenMagic && !next.equals("#EXTM3U")) {
-                                throw new RuntimeException("no magic at start of eventproxy");
+                                throw new RuntimeException("no magic at start of streamproxy");
                             } else {
                                 switch (next) {
                                     case "#EXTM3U":
