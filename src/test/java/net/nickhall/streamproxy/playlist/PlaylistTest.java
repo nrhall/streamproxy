@@ -1,7 +1,9 @@
 package net.nickhall.streamproxy.playlist;
 
 import org.junit.Test;
-import static org.junit.Assert.*;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class PlaylistTest {
     @Test
@@ -29,5 +31,11 @@ public class PlaylistTest {
         Playlist eventEnded = new Playlist(getClass().getClassLoader().getResource("playlist-event-ended.m3u8"));
         assertEquals(PlaylistType.EVENT, eventEnded.getType());
         assertTrue(eventEnded.hasEnded());
+    }
+
+    @Test
+    public void testMergeUrl() throws Exception {
+        String merge1 = Playlist.mergeUrls("http://www.example.com/1.m3u8", "./something");
+        assertEquals("http://www.example.com/something", merge1);
     }
 }

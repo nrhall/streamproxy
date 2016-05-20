@@ -3,7 +3,12 @@ package net.nickhall.streamproxy.service.impl;
 import io.dropwizard.Application;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
+import net.nickhall.streamproxy.engine.PlaylistCachingEngine;
 import no.digipost.dropwizard.TypeSafeConfigBundle;
+import org.apache.http.impl.nio.client.CloseableHttpAsyncClient;
+import org.apache.http.impl.nio.client.HttpAsyncClients;
+
+import java.nio.file.Paths;
 
 public class StreamProxyApplication extends Application<StreamProxyConfiguration> {
     @Override
@@ -13,8 +18,20 @@ public class StreamProxyApplication extends Application<StreamProxyConfiguration
 
     @Override
     public void run(StreamProxyConfiguration streamProxyConfiguration, Environment environment) throws Exception {
-        final StreamProxyService eventProxyService = new StreamProxyService();
-        environment.jersey().register(eventProxyService);
+        // create and start the async HTTP client
+        final CloseableHttpAsyncClient httpAsyncClient = HttpAsyncClients.createDefault();
+        httpAsyncClient.start();
+
+        // create the playlist caching engine
+        final PlaylistCachingEngine playlistCachingEngine = new PlaylistCachingEngine(
+                httpAsyncClient,
+                streamProxyConfiguration.getThreads(),
+                Paths.get(streamProxyConfiguration.getCacheDir())
+        );
+
+        // create the proxy service
+        final StreamProxyService streamProxyService = new StreamProxyService(playlistCachingEngine, httpAsyncClient);
+        environment.jersey().register(streamProxyService);
     }
 
     public static void main(String[] args) throws Exception {

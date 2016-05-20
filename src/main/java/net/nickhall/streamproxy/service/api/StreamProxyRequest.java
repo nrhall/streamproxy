@@ -1,14 +1,19 @@
 package net.nickhall.streamproxy.service.api;
 
 public class StreamProxyRequest {
-    private String uri;
+    private String url;
     private int sequence;
+    private String cacheKey;
 
-    public String getUri() {
-        return uri;
+    public String getURL() {
+        return url;
     }
 
     public int getSequence() {
         return sequence;
+    }
+
+    public String getCacheKey() {
+        return cacheKey;
     }
 }
