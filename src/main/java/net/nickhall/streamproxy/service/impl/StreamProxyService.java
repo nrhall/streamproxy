@@ -12,7 +12,6 @@ import org.apache.http.nio.client.HttpAsyncClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Response;
@@ -25,8 +24,6 @@ public class StreamProxyService implements StreamProxy {
 
     public StreamProxyService(PlaylistCachingEngine engine, HttpAsyncClient httpAsyncClient) {
         this.engine = engine;
-
-        // start the async client
         this.httpAsyncClient = httpAsyncClient;
     }
 
@@ -44,7 +41,7 @@ public class StreamProxyService implements StreamProxy {
                     if (status != Status.OK.getStatusCode()) {
                         // handle authentication and other client errors by passing back the status code
                         if (status >= 400 && status < 500) {
-                            asyncResponse.resume(new WebApplicationException(status));
+                            asyncResponse.resume(Response.status(status).build());
                         } else {
                             asyncResponse.resume(Response.serverError().build());
                         }
@@ -57,13 +54,16 @@ public class StreamProxyService implements StreamProxy {
                             asyncResponse.resume(Response.status(Status.BAD_REQUEST));
                         } else {
                             try {
-                                Playlist playlist = new Playlist(httpResponse.getEntity().getContent(), request.getURL());
+                                Playlist playlist = Playlist.newBuilder()
+                                        .withUrl(request.getURL())
+                                        .withInputStream(httpResponse.getEntity().getContent())
+                                        .build();
 
                                 // ask the caching engine to cache the playlist
                                 if (request.getCacheKey() == null) {
                                     asyncResponse.resume(Response.serverError().build());
                                 } else {
-                                    engine.cache(playlist, request.getCacheKey());
+                                    engine.cachePlaylist(playlist, request.getCacheKey());
                                     asyncResponse.resume(Response.ok().build());
                                 }
                             } catch (Exception e) {
@@ -74,10 +74,11 @@ public class StreamProxyService implements StreamProxy {
                     }
                 }
 
+                // TODO: an exception for failed()/cancelled() could be for a number of reasons -
+                // TODO: client or server, would be worth potentially expanding this into a more useful error -
+                // TODO: but internal server error do for now
                 @Override
                 public void failed(Exception e) {
-                    // TODO: an exception here could be for a number of reasons - client or server, would be
-                    // TODO: worth doing some testing to see what gets returned under different circumstances
                     asyncResponse.resume(Response.serverError().build());
                 }
 

@@ -32,7 +32,7 @@ public class PlaylistCachingEngine {
         this.cacheBasePath = cacheBasePath;
     }
 
-    public void cache(Playlist playlist, String cacheKey) {
+    public void cachePlaylist(Playlist playlist, String cacheKey) {
         Path cachePath = this.cacheBasePath.resolve(cacheKey);
 
         // determine where the cache will be stored
@@ -51,58 +51,53 @@ public class PlaylistCachingEngine {
             cache.put(cacheKey, playlist);
 
             // create tasks for each download and submit to the executor
-            playlist.getSegments()
-                    .stream()
-                    .forEach(segment -> CompletableFuture
-                            .supplyAsync(() -> {
-                                // check for a relative url
-                                String url;
-                                if (segment.getUrl().startsWith(".")) {
-                                    url = Playlist.mergeUrls(playlist.getUrl(), segment.getUrl());
-                                } else {
-                                    url = segment.getUrl();
-                                }
+            playlist.getSegments().stream()
+                    .forEach(segment -> {
+                        // handle the case where the segment URL might be relative
+                        String url = segment.getUrl(playlist.getUrl());
 
-                                logger.info("cache segment: {}", url);
+                        CompletableFuture
+                                .supplyAsync(() -> {
+                                    logger.info("cache segment: {}", url);
 
-                                // create the request/request producer and execute
-                                HttpGet request = new HttpGet(url);
-                                httpAsyncClient.execute(request, new FutureCallback<HttpResponse>() {
-                                    @Override
-                                    public void completed(HttpResponse httpResponse) {
-                                        int status = httpResponse.getStatusLine().getStatusCode();
-                                        if (status == Response.Status.OK.getStatusCode()) {
-                                            // stream the entity to the cache file
-                                            try {
-                                                String cachedFilename = Integer.toString(segment.getSequence());
-                                                OutputStream outputStream =
-                                                        Files.newOutputStream(cachePath.resolve(cachedFilename));
-                                                httpResponse.getEntity().writeTo(outputStream);
-                                            } catch (IOException e) {
-                                                throw new RuntimeException(e);
+                                    // create the request/request producer and execute
+                                    HttpGet request = new HttpGet(url);
+                                    httpAsyncClient.execute(request, new FutureCallback<HttpResponse>() {
+                                        @Override
+                                        public void completed(HttpResponse httpResponse) {
+                                            int status = httpResponse.getStatusLine().getStatusCode();
+                                            if (status == Response.Status.OK.getStatusCode()) {
+                                                // stream the entity to the cache file
+                                                try {
+                                                    String cachedFilename = Integer.toString(segment.getSequence());
+                                                    OutputStream outputStream =
+                                                            Files.newOutputStream(cachePath.resolve(cachedFilename));
+                                                    httpResponse.getEntity().writeTo(outputStream);
+                                                } catch (IOException e) {
+                                                    throw new RuntimeException(e);
+                                                }
+                                            } else {
+                                                throw new RuntimeException("non ok status from server");
                                             }
-                                        } else {
-                                            throw new RuntimeException("non ok status from server");
                                         }
-                                    }
 
-                                    @Override
-                                    public void failed(Exception e) {
-                                        throw new RuntimeException(e);
-                                    }
+                                        @Override
+                                        public void failed(Exception e) {
+                                            throw new RuntimeException(e);
+                                        }
 
-                                    @Override
-                                    public void cancelled() {
-                                        throw new RuntimeException("request cancelled");
-                                    }
-
+                                        @Override
+                                        public void cancelled() {
+                                            throw new RuntimeException("request cancelled");
+                                        }
+                                    });
+                                    return segment;
+                                }, executor)
+                                .thenAccept(s -> {
+                                    logger.info("cache segment complete: {}", url);
+                                    s.setDownloaded(true);
                                 });
-                                return segment;
-                            }, executor)
-                            .thenAccept(s -> {
-                                logger.info("cache segment complete: {}", segment.getUrl());
-                                s.setDownloaded(true);
-                            }));
+                    });
         }
     }
 

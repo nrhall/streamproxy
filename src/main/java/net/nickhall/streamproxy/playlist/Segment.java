@@ -3,12 +3,12 @@ package net.nickhall.streamproxy.playlist;
 public class Segment {
     private final int sequence;
     private final String title;
-    private final String duration;
+    private final double duration;
     private String url;
     private boolean downloaded;
     private String dateTime;
 
-    public Segment(int sequence, String title, String duration) {
+    public Segment(int sequence, String title, double duration) {
         this.sequence = sequence;
         this.title = title;
         this.duration = duration;
@@ -18,15 +18,34 @@ public class Segment {
         return title;
     }
 
-    public String getDuration() {
+    public double getDuration() {
         return duration;
     }
 
-    public String getUrl() {
+    public String getSegmentUrl() {
         return url;
     }
 
-    public void setURL(String url) {
+    public String getUrl(String playlistUrl) {
+        String[] segmentUrlSplit = url.split("/");
+        if (segmentUrlSplit[0].equals(".")) {
+            // this means the segment URL is relative to the playlist
+            String[] playlistUrlSplit = playlistUrl.split("/");
+
+            // remove the playlist name from the playlistUrl and retain the parent URL, then add the
+            // segment URL minus the '.' (first component)
+            String[] merge = new String[playlistUrlSplit.length - 1 + segmentUrlSplit.length - 1];
+            System.arraycopy(playlistUrlSplit, 0, merge, 0, playlistUrlSplit.length - 1);
+            System.arraycopy(segmentUrlSplit, 1, merge, playlistUrlSplit.length - 1, segmentUrlSplit.length - 1);
+            return String.join("/", merge);
+        }
+        else {
+            // segment URL is absolute
+            return url;
+        }
+    }
+
+    public void setSegmentURL(String url) {
         this.url = url;
     }
 

@@ -9,7 +9,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.util.LinkedList;
-import java.util.NoSuchElementException;
 
 public class Playlist {
     private static Logger logger = LoggerFactory.getLogger(Playlist.class);
@@ -19,21 +18,117 @@ public class Playlist {
     private boolean seenMagic = false;
     private int version;
     private int sequence;
-    private String targetDuration;
+    private int targetDuration;
     private String url;
 
-    public Playlist(URL url) throws PlaylistException {
-        this.url = url.toString();
-        try {
-            parse(url.openStream());
-        } catch (IOException e) {
-            throw new PlaylistException(e);
+    public static class Builder {
+        private String urlString;
+        private URL url = null;
+        private InputStream inputStream;
+
+        public Builder withUrl(URL url) {
+            this.urlString = url.toString();
+            this.url = url;
+            return this;
+        }
+
+        public Builder withUrl(String urlString) {
+            this.urlString = urlString;
+            return this;
+        }
+
+        public Builder withInputStream(InputStream inputStream) {
+            this.inputStream = inputStream;
+            return this;
+        }
+
+        public Playlist build() throws PlaylistException {
+            Playlist playlist = new Playlist(urlString);
+
+            if (url != null) {
+                try (InputStream inputStream = url.openStream()) {
+                    playlist.parse(inputStream);
+                } catch (IOException e) {
+                    throw new PlaylistException(e);
+                }
+            } else if (inputStream != null) {
+                playlist.parse(inputStream);
+            }
+
+            return playlist;
         }
     }
 
-    public Playlist(InputStream playlistStream, String url) throws PlaylistException {
+    public static Builder newBuilder() {
+        return new Builder();
+    }
+
+    private Playlist(String url) throws PlaylistException {
         this.url = url;
-        parse(playlistStream);
+    }
+
+    private void parse(InputStream inputStream) throws PlaylistException {
+        try {
+            // get a buffered reader so we can use a Stream
+            BufferedReader playlistStreamReader = new BufferedReader(new InputStreamReader(inputStream));
+            playlistStreamReader.lines()
+                    .forEach(l -> {
+                        // parse any lines beginning with #EXT; these are markers referring to the next segment
+                        // went with a simple split() approach here instead of anything more complicated
+                        // see http://stackoverflow.com/questions/6983856/why-is-stringtokenizer-deprecated
+                        // and http://stackoverflow.com/questions/691184/scanner-vs-stringtokenizer-vs-string-split
+                        String[] s = l.split(":");
+
+                        // file must begin with #EXTM3U
+                        if (!seenMagic && !s[0].equals("#EXTM3U")) {
+                            throw new RuntimeException("no magic at start of streamproxy");
+                        }
+
+                        switch (s[0]) {
+                            case "#EXTM3U":
+                                seenMagic = true;
+                                break;
+                            case "#EXT-X-VERSION":
+                                version = Integer.parseInt(s[1]);
+                                break;
+                            case "#EXT-X-PLAYLIST-TYPE":
+                                type = PlaylistType.valueOf(s[1]);
+                                break;
+                            case "#EXT-X-TARGETDURATION":
+                                targetDuration = Integer.parseInt(s[1]);
+                                break;
+                            case "#EXT-X-MEDIA-SEQUENCE":
+                                sequence = Integer.parseInt(s[1]);
+                                break;
+                            case "#EXT-X-ENDLIST":
+                                ended = true;
+                                break;
+                            case "#EXTINF":
+                                String[] s2 = s[1].split(",");
+                                double duration = Double.parseDouble(s2[0]);
+                                String title = "";
+                                if (s2.length == 2) {
+                                    title = s2[1];
+                                }
+                                segments.addLast(new Segment(sequence++, title, duration));
+                                break;
+                            case "#EXT-X-PROGRAM-DATE-TIME":
+                                segments.getLast().setDateTime(s[1]);
+                                break;
+                            default:
+                                if (s[0].startsWith("#")) {
+                                    if (s[0].startsWith("#EXT")) {
+                                        logger.error("unknown tag: {}", s[0]);
+                                    }
+                                } else {
+                                    segments.getLast().setSegmentURL(s[0]);
+                                }
+                                break;
+                        }
+                    });
+        } catch (RuntimeException e) {
+            throw new PlaylistException(e);
+        }
     }
 
     public PlaylistType getType() {
@@ -50,79 +145,6 @@ public class Playlist {
 
     public boolean hasEnded() {
         return ended;
-    }
-
-    private void parse(InputStream playlistStream) throws PlaylistException {
-        try {
-            // get a buffered reader so we can use a Stream
-            BufferedReader playlistStreamReader = new BufferedReader(new InputStreamReader(playlistStream));
-
-            playlistStreamReader.lines()
-                    .forEach(l -> {
-                        // parse any lines beginning with #EXT; these are markers referring to the next segment
-                        String[] s = l.split(":");
-                        try {
-                            // file must begin with #EXTM3U
-                            if (!seenMagic && !s[0].equals("#EXTM3U")) {
-                                throw new RuntimeException("no magic at start of streamproxy");
-                            } else {
-                                switch (s[0]) {
-                                    case "#EXTM3U":
-                                        seenMagic = true;
-                                        break;
-                                    case "#EXT-X-VERSION":
-                                        version = Integer.parseInt(s[1]);
-                                        break;
-                                    case "#EXT-X-PLAYLIST-TYPE":
-                                        type = PlaylistType.valueOf(s[1]);
-                                        break;
-                                    case "#EXT-X-TARGETDURATION":
-                                        targetDuration = s[1];
-                                        break;
-                                    case "#EXT-X-MEDIA-SEQUENCE":
-                                        sequence = Integer.parseInt(s[1]);
-                                        break;
-                                    case "#EXT-X-ENDLIST":
-                                        ended = true;
-                                        break;
-                                    case "#EXTINF":
-                                        String[] s2 = s[1].split(",");
-                                        String duration = s2[0];
-                                        String title = "";
-                                        if (s2.length == 2) {
-                                            title = s2[1];
-                                        }
-                                        segments.addLast(new Segment(sequence++, title, duration));
-                                        break;
-                                    case "#EXT-X-PROGRAM-DATE-TIME":
-                                        segments.getLast().setDateTime(s[1]);
-                                        break;
-                                    default:
-                                        if (s[0].startsWith("#")) {
-                                            if (s[0].startsWith("#EXT")) {
-                                                logger.error("unknown tag: {}", s[0]);
-                                            }
-                                        } else {
-                                            segments.getLast().setURL(s[0]);
-                                        }
-                                }
-                            }
-                        } catch (NoSuchElementException e) {
-                            //
-                        }
-                    });
-        } catch (RuntimeException e) {
-            throw new PlaylistException(e);
-        }
-    }
-
-    public static String mergeUrls(String playlistUrl, String segmentUrl) {
-        String[] playlistUrlSplit = playlistUrl.split("/");
-        String[] segmentUrlSplit = segmentUrl.split("/");
-        String[] merge = new String[playlistUrlSplit.length - 1 + segmentUrlSplit.length - 1];
-        System.arraycopy(playlistUrlSplit, 0, merge, 0, playlistUrlSplit.length - 1);
-        System.arraycopy(segmentUrlSplit, 1, merge, playlistUrlSplit.length - 1, segmentUrlSplit.length - 1);
-        return String.join("/", merge);
     }
 
     @Override
